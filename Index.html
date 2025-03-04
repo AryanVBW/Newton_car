@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Newton Car Control</title>
+<style>
+body{background:#000;color:#fff;font-family:system-ui;margin:0;padding:10px;text-align:center;touch-action:manipulation;-webkit-user-select:none;user-select:none}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(70px,80px));grid-template-rows:repeat(3,minmax(70px,80px));gap:8px;margin:20px auto}
+.btn{background:none;border:2px solid #0f0;color:#0f0;border-radius:12px;font-size:24px;font-weight:bold;display:flex;align-items:center;justify-content:center}
+.btn:active{background:#0f02}
+.stop{border-color:#f00;color:#f00}
+.stunts{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:15px auto;max-width:300px}
+.stunt-btn{background:none;border:2px solid #56f;color:#56f;padding:12px 5px;border-radius:12px;font-size:18px;font-weight:bold}
+.ind{position:fixed;top:10px;right:10px;width:10px;height:10px;border-radius:50%;background:#333}
+.connected{background:#0f0}
+.error{background:#f00}
+.title{margin:10px 0;font-size:24px}
+.section{margin:10px 0;font-size:18px;color:#0f0}
+.hint{margin:8px 0;font-size:14px;color:#56f}
+</style>
+</head>
+<body>
+<div id="indicator" class="ind"></div>
+<h1 class="title">Newton Car Control</h1>
+
+<div class="section">Direction Control</div>
+<div class="grid">
+<div></div><button class="btn" id="forward-btn">&#9650;</button><div></div>
+<button class="btn" id="left-btn">&#9668;</button><button class="btn stop" id="stop-btn">■</button><button class="btn" id="right-btn">&#9658;</button>
+<div></div><button class="btn" id="backward-btn">&#9660;</button><div></div>
+</div>
+
+<div class="section">Special Moves</div>
+<div class="stunts">
+<button class="stunt-btn" id="figure8-btn">Figure 8</button>
+<button class="stunt-btn" id="spin-btn">Spin</button>
+<button class="stunt-btn" id="zigzag-btn">Zigzag</button>
+<button class="stunt-btn" id="test-btn">Test Motors</button>
+</div>
+
+<div class="hint">Use W/A/S/D keys on desktop</div>
+
+<script>
+'use strict';
+const controlButtons = {
+  'forward-btn': 'forward',
+  'backward-btn': 'backward',
+  'left-btn': 'left',
+  'right-btn': 'right',
+  'stop-btn': 'stop',
+  'figure8-btn': 'figure8',
+  'spin-btn': 'spin',
+  'zigzag-btn': 'zigzag',
+  'test-btn': 'test'
+};
+
+let activeCommand = null;
+let lastCommandTime = 0;
+
+// Prevent zoom/scroll on mobile
+document.addEventListener('touchmove', e => e.preventDefault(), {passive: false});
+document.addEventListener('touchstart', e => {
+  if (e.target.tagName === 'BUTTON') e.preventDefault();
+}, {passive: false});
+
+function vibrate(duration) {
+  if ('vibrate' in navigator) navigator.vibrate(duration);
+}
+
+function sendCommand(command) {
+  const now = Date.now();
+  if (now - lastCommandTime < 80) return;
+  lastCommandTime = now;
+  
+  const indicator = document.getElementById('indicator');
+  indicator.className = 'ind';
+  
+  fetch('/' + command)
+    .then(response => {
+      indicator.className = response.ok ? 'ind connected' : 'ind error';
+      setTimeout(() => indicator.className = 'ind', 500);
+    })
+    .catch(() => {
+      indicator.className = 'ind error';
+      setTimeout(() => indicator.className = 'ind', 500);
+    });
+}
+
+// Setup control buttons with touch/mouse events
+for (const [btnId, command] of Object.entries(controlButtons)) {
+  const btn = document.getElementById(btnId);
+  if (!btn) continue;
+  
+  // For movement controls (excluding special moves), handle press/release
+  if (['forward', 'backward', 'left', 'right'].includes(command)) {
+    btn.addEventListener('touchstart', () => {
+      vibrate(20);
+      activeCommand = command;
+      sendCommand(command);
+    });
+    
+    btn.addEventListener('touchend', () => {
+      if (activeCommand === command) {
+        activeCommand = null;
+        sendCommand('stop');
+      }
+    });
+    
+    btn.addEventListener('mousedown', () => {
+      activeCommand = command;
+      sendCommand(command);
+    });
+    
+    btn.addEventListener('mouseup', () => {
+      if (activeCommand === command) {
+        activeCommand = null;
+        sendCommand('stop');
+      }
+    });
+    
+    btn.addEventListener('mouseleave', () => {
+      if (activeCommand === command) {
+        activeCommand = null;
+        sendCommand('stop');
+      }
+    });
+  } else {
+    // For special moves and stop, just handle click
+    btn.addEventListener('click', () => {
+      vibrate(20);
+      sendCommand(command);
+      activeCommand = null;
+    });
+  }
+}
+
+// Keyboard controls for desktop
+const keyMap = {
+  'w': 'forward',
+  's': 'backward',
+  'a': 'left',
+  'd': 'right',
+  ' ': 'stop'
+};
+
+document.addEventListener('keydown', e => {
+  const command = keyMap[e.key.toLowerCase()];
+  if (command && activeCommand !== command) {
+    activeCommand = command;
+    sendCommand(command);
+  }
+});
+
+document.addEventListener('keyup', e => {
+  const command = keyMap[e.key.toLowerCase()];
+  if (command && activeCommand === command) {
+    activeCommand = null;
+    sendCommand('stop');
+  }
+});
+
+// Handle page visibility change
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && activeCommand) {
+    sendCommand('stop');
+    activeCommand = null;
+  }
+});
+</script>
+</body>
+</html>
